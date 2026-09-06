@@ -17,3 +17,17 @@ Each listing photo becomes one small 3D Gaussian splat world. The viewer shows o
 3. Run `cli.py --ply --spz --offload_t5 --offload_transformer_during_vae --offload_vae`.
 4. Optionally crop floaters in [SuperSplat](https://supersplat.at) and re-export as SPZ.
 5. Copy to `rooms/<room>.spz`, add the room to the `ROOMS` list in `index.html`, push.
+
+## Export compatibility
+
+FlashWorld uses OpenGL world coordinates, so the viewer must not add a half turn about X.
+Its current SPZ exporter also permutes splat quaternions incorrectly. Convert the original
+PLY (w,x,y,z rotations) to SPZ (x,y,z,w) using the generation environment:
+
+```sh
+python tools/convert-room.py /path/to/gaussians.ply rooms/master_cabin.spz
+```
+
+The converter checks rotation accuracy after an SPZ round trip. The owner cabin also
+has its original generated video in `preview/master_cabin.mp4`, available through
+"Video ansehen". Increment the room's `version` when replacing its SPZ to refresh caches.

@@ -8,7 +8,7 @@
   :root { color-scheme: dark; }
   html, body { margin: 0; height: 100%; background: #0b0d10; color: #e8e8e8; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow: hidden; }
   canvas { display: block; }
-  #menu { position: fixed; top: 12px; left: 12px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100vw - 24px); z-index: 2; }
+  #menu { position: fixed; top: 12px; left: 12px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100vw - 340px); z-index: 2; }
   #menu button { background: rgba(20,22,26,.85); color: #e8e8e8; border: 1px solid #3a3f47; border-radius: 6px; padding: 8px 12px; cursor: pointer; font: inherit; }
   #menu button:hover { border-color: #8ab4f8; }
   #menu button.active { background: #8ab4f8; color: #0b0d10; border-color: #8ab4f8; }
@@ -17,12 +17,14 @@
   #status { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); background: rgba(20,22,26,.9); padding: 14px 18px; border-radius: 8px; z-index: 3; display: none; }
   #help { position: fixed; left: 12px; bottom: 44px; background: rgba(20,22,26,.75); padding: 8px 12px; border-radius: 6px; z-index: 2; color: #c8c8c8; }
   #footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px 12px; background: rgba(20,22,26,.85); color: #b8b8b8; font-size: 12px; z-index: 2; }
-  @media (max-width: 640px) { #help { display: none; } }
+  @media (max-width: 640px) { #help { display: none; } #menu { max-width: calc(100vw - 24px); } #hud { top: auto; bottom: 65px; } }
+  #room-video { position: fixed; inset: 60px 0 48px; width: 100%; height: calc(100% - 108px); object-fit: contain; background: #0b0d10; z-index: 1; }
 </style>
 </head>
 <body>
 <div id="menu"></div>
-<div id="hud"><button id="reset">Ansicht zurücksetzen</button></div>
+<video id="room-video" controls loop playsinline hidden preload="none" poster="preview/master_cabin-frame.jpg"></video>
+<div id="hud"><button id="video-toggle" hidden>Video ansehen</button><button id="reset">Ansicht zurücksetzen</button></div>
 <div id="help">Maus ziehen: umsehen · W A S D / Pfeile: gehen · Q / E: runter / hoch · Touch: 1 Finger umsehen, 2 Finger gehen</div>
 <div id="status">Lade Raum…</div>
 <div id="footer">KI-Impression auf Basis der Inserat-Fotos. Nicht das echte Schiff: alles ausserhalb des jeweiligen Fotos ist vom Modell ergänzt.</div>
@@ -44,7 +46,7 @@ import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
 const ROOMS = [
   { id: "saloon_aft",   label: "Salon (achtern)" },
   { id: "saloon_table", label: "Salon (Tisch)" },
-  { id: "master_cabin", label: "Eignerkabine" },
+  { id: "master_cabin", label: "Eignerkabine", version: "rotations-v2", video: "preview/master_cabin.mp4" },
   { id: "guest_cabin",  label: "Gästekabine" },
   { id: "heads",        label: "Nasszelle" },
 ];
@@ -125,13 +127,27 @@ function walk(now) {
 // Room loading
 let current = null;
 const status = document.getElementById("status");
+const video = document.getElementById("room-video");
+const videoToggle = document.getElementById("video-toggle");
+videoToggle.onclick = () => {
+  video.hidden = !video.hidden;
+  document.getElementById("help").hidden = !video.hidden;
+  videoToggle.textContent = video.hidden ? "Video ansehen" : "3D erkunden";
+  if (video.hidden) video.pause();
+  else { state.keys.clear(); video.play().catch(() => {}); }
+};
 async function loadRoom(room) {
+  video.pause();
+  video.hidden = true;
+  document.getElementById("help").hidden = false;
+  videoToggle.hidden = !room.video;
+  videoToggle.textContent = "Video ansehen";
+  if (room.video) video.src = room.video;
+  else video.removeAttribute("src");
   status.textContent = `Lade ${room.label}…`; status.style.display = "block";
   if (current) { scene.remove(current); current.dispose?.(); current = null; }
-  const mesh = new SplatMesh({ url: ROOM_DIR + room.id + EXT });
-  // FlashWorld writes splats in the reference camera's frame (x right, y down, z forward).
-  // A half turn about X brings them into Three.js axes so a camera at the origin looking down -Z sees the photo view.
-  mesh.quaternion.set(1, 0, 0, 0);
+  const mesh = new SplatMesh({ url: ROOM_DIR + room.id + EXT + (room.version ? "?v=" + room.version : "") });
+  // FlashWorld exports OpenGL world coordinates, matching Three.js; no extra rotation.
   scene.add(mesh);
   current = mesh;
   resetView();
@@ -151,7 +167,7 @@ for (const room of ROOMS) {
 document.getElementById("reset").onclick = resetView;
 addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
-renderer.setAnimationLoop(now => { walk(now); applyCamera(); renderer.render(scene, camera); });
+renderer.setAnimationLoop(now => { if (!video.hidden) { last = now; return; } walk(now); applyCamera(); renderer.render(scene, camera); });
 
 const fromHash = ROOMS.find(r => "#" + r.id === location.hash);
 loadRoom(fromHash || ROOMS.find(r => r.id === "master_cabin"));
