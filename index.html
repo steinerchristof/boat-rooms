@@ -154,7 +154,7 @@ addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; cam
 renderer.setAnimationLoop(now => { walk(now); applyCamera(); renderer.render(scene, camera); });
 
 const fromHash = ROOMS.find(r => "#" + r.id === location.hash);
-loadRoom(fromHash || ROOMS[0]);
+loadRoom(fromHash || ROOMS.find(r => r.id === "master_cabin"));
 </script>
 </body>
 </html>
